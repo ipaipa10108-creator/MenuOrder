@@ -12,7 +12,7 @@
     <script type="importmap">
       {
         "imports": {
-          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+          "@google/generative-ai": "https://esm.run/@google/generative-ai@0.21.0"
         }
       }
     </script>
@@ -585,11 +585,15 @@
             setLoading(true, "AI 正在分析菜單...");
 
             try {
+                // 從 window.GoogleGenerativeAI (ESM 載入)
                 const genAI = new window.GoogleGenerativeAI(state.geminiKey);
+
+                // 取得模型。如果使用者輸入 gemini-1.5-flash，SDK 會自動處理 v1beta 或 v1
                 const modelName = state.geminiModel || 'gemini-1.5-flash';
                 const model = genAI.getGenerativeModel({ model: modelName });
 
-                const prompt = `請將這張菜單轉換為 JSON Array。格式: [{"item": "品名", "price": 數字, "category": "類別"}]。只輸出純 JSON，不要 Markdown。`;
+                const prompt = "請分析這張菜單圖片，並將其轉換為嚴格的 JSON 格式。JSON 結構應該是一個 List，其中每個物件代表一個品項，包含欄位：'item' (品名), 'price' (數字), 'category' (類別)。不要輸出任何 Markdown 標記，只輸出純 JSON。";
+
                 const imagePart = {
                     inlineData: {
                         data: fileBase64,
