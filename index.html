@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>下午茶神隊友 (雲端版)</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Google GenAI SDK -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+    <style>
+        :root {
+            --primary: #9d4edd;
+            --primary-glass: rgba(157, 78, 221, 0.4);
+            --bg-dark: #10002b;
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-main: #e0aaff;
+            --text-bright: #ffffff;
+            --success: #06d6a0;
+            --danger: #ef476f;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #10002b 0%, #240046 50%, #3c096c 100%);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        h1, h2, h3 { color: var(--text-bright); margin-top: 0; }
+        
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: 0.3s;
+            box-shadow: 0 2px 10px rgba(157, 78, 221, 0.3);
+        }
+        button:hover { background: #7b2cbf; transform: translateY(-2px); }
+        button:disabled { background: #555; cursor: not-allowed; transform: none; }
+        
+        button.danger { background: var(--danger); }
+        button.secondary { background: transparent; border: 1px solid var(--primary); }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 15px 0;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            box-sizing: border-box;
+        }
+        input:focus { outline: 2px solid var(--primary); }
+
+        /* Status Badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .badge.active { background: rgba(6, 214, 160, 0.2); color: var(--success); border: 1px solid var(--success); }
+        .badge.closed { background: rgba(239, 71, 111, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+
+        /* Menu Grid */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .menu-item {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .menu-item:hover {
+            border-color: var(--primary);
+            background: rgba(255,255,255,0.1);
+        }
+        .menu-item.selected {
+            background: var(--primary-glass);
+            border-color: var(--primary);
+        }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; background: transparent; border: 1px solid var(--glass-border); }
+        .tab-btn.active { background: var(--primary); border-color: var(--primary); }
+
+        /* Loading */
+        #loading-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 999;
+            color: white;
+            flex-direction: column;
+        }
+        .hidden { display: none !important; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--glass-border); }
+        th { color: var(--text-bright); }
+        
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            background: var(--primary); color: white;
+            padding: 10px 20px; border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s;
+            z-index: 1000;
+        }
+        @keyframes slideIn { from { transform: translateY(100px); } to { transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <p id="loading-text">載入中...</p>
+</div>
+
+<div class="container">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h1 style="margin:0;">🧋 下午茶神隊友</h1>
+        <button onclick="toggleSettings()" class="secondary" style="padding: 5px 10px; font-size: 0.8rem;">⚙️ 設定</button>
+    </div>
+
+    <!-- 設定 Modal (使用 glass-card 模擬) -->
+    <div id="settings-panel" class="glass-card hidden">
+        <h3>系統設定</h3>
+        <label>GAS Web App URL</label>
+        <input type="text" id="config-gas-url" placeholder="https://script.google.com/macros/s/.../exec">
+        <label>Gemini API Key (主揪專用)</label>
+        <input type="password" id="config-gemini-key" placeholder="AIza...">
+        <button onclick="saveSettings()">儲存並重整</button>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchMode('user')" id="btn-mode-user">我要點餐</button>
+        <button class="tab-btn" onclick="switchMode('admin')" id="btn-mode-admin">我要開團</button>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin-panel" class="hidden">
+        <div class="glass-card">
+            <h2>👑 開啟新團購</h2>
+            <div id="active-event-warning" class="hidden" style="color: var(--danger); margin-bottom: 10px;">
+                ⚠️ 檢測到已有進行中的活動，開新團將會隱藏舊活動。
+            </div>
+            
+            <label>活動名稱</label>
+            <input type="text" id="new-event-name" value="下午茶團購">
+            
+            <label>上傳菜單圖片</label>
+            <input type="file" id="menu-image" accept="image/*">
+            
+            <div id="parsed-result" class="hidden">
+                <h3>解析結果 (可預覽編輯)</h3>
+                <textarea id="menu-json-editor" rows="10" style="font-family: monospace; font-size:0.8rem;"></textarea>
+                <div style="font-size:0.8rem; color:#aaa;">* 請確認 JSON 格式正確</div>
+            </div>
+
+            <button onclick="parseMenu()" id="btn-parse" style="width:100%; margin-bottom:10px;">🤖 AI 解析菜單</button>
+            <button onclick="publishEvent()" id="btn-publish" class="hidden" style="width:100%;">🚀 發布活動</button>
+            
+            <hr style="border-color: var(--glass-border); margin: 20px 0;">
+             <button onclick="closeCurrentEvent()" class="danger" style="width:100%;">🔴 強制結單 (關閉當前活動)</button>
+        </div>
+    </div>
+
+    <!-- User Panel -->
+    <div id="user-panel">
+        <!-- Event Header -->
+        <div class="glass-card" id="event-header-card">
+            <div style="display:flex; justify-content:space-between;">
+                <h2 id="display-event-name">讀取中...</h2>
+                <span class="badge" id="display-event-status">檢查中</span>
+            </div>
+            <p id="display-event-time" style="font-size:0.9rem; opacity:0.7;"></p>
+        </div>
+
+        <!-- Order Form -->
+        <div id="order-form" class="glass-card hidden">
+            <h3>📝 我要點餐</h3>
+            <label>您的暱稱</label>
+            <input type="text" id="buyer-name" placeholder="例如: 小明">
+            
+            <label>選擇飲品</label>
+            <select id="item-select" onchange="updatePrice()"></select>
+            
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1">
+                    <label>價格</label>
+                    <input type="number" id="item-price" readonly>
+                </div>
+                <div style="flex:2">
+                    <label>備註 (甜度冰塊)</label>
+                    <input type="text" id="item-notes" placeholder="微糖去冰">
+                </div>
+            </div>
+            
+            <button onclick="submitOrder()" style="width:100%;">🛒 送出訂單</button>
+        </div>
+
+        <!-- Orders List -->
+        <div class="glass-card">
+            <h3>📊 目前訂單</h3>
+            <div style="overflow-x: auto;">
+                <table id="orders-table">
+                    <thead><tr><th>誰</th><th>喝什麼</th><th>備註</th><th>$</th></tr></thead>
+                    <tbody></tbody>
+                    <tfoot><tr><th colspan="3">總計</th><th id="total-sum">$0</th></tr></tfoot>
+                </table>
+            </div>
+            <button onclick="copyOrders()" class="secondary" style="margin-top:10px; width:100%;">📋 複製訂單內容</button>
+        </div>
+
+        <!-- History -->
+        <div class="glass-card">
+            <h3 onclick="toggleHistory()" style="cursor:pointer; display:flex; justify-content:space-between;">
+                <span>📜歷史紀錄 (點擊展開)</span>
+                <span>▼</span>
+            </h3>
+            <div id="history-content" class="hidden">
+                 <table id="history-table">
+                    <thead><tr><th>日期</th><th>活動</th><th>$</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script type="module">
+    import { GoogleGenerativeAI } from "@google/generative-ai";
+    window.GoogleGenerativeAI = GoogleGenerativeAI;
+</script>
+
+<script>
+// --- State ---
+const state = {
+    gasUrl: localStorage.getItem('gas_url') || '',
+    geminiKey: localStorage.getItem('gemini_key') || '',
+    currentEvent: null,
+    menuData: [],
+    orders: []
+};
+
+// --- Initialization ---
+window.onload = function() {
+    document.getElementById('config-gas-url').value = state.gasUrl;
+    document.getElementById('config-gemini-key').value = state.geminiKey;
+    
+    // Default Name
+    const savedName = localStorage.getItem('buyer_name');
+    if(savedName) document.getElementById('buyer-name').value = savedName;
+
+    // Date in Input
+    const today = new Date();
+    document.getElementById('new-event-name').value = `${today.getMonth()+1}/${today.getDate()} 下午茶`;
+
+    if(!state.gasUrl) {
+        setLoading(false);
+        alert("請先在設定中輸入 Google Apps Script URL");
+        toggleSettings();
+    } else {
+        fetchActiveEvent();
+        // Start Polling
+        setInterval(refreshOrders, 10000); 
+    }
+};
+
+// --- API Calls ---
+async function callAPI(action, params = {}) {
+    if (!state.gasUrl) return null;
+    
+    const body = JSON.stringify({ action, ...params });
+    try {
+        const res = await fetch(state.gasUrl, {
+            method: 'POST',
+            body: body
+            // mode: 'no-cors' // Do NOT use no-cors if you want response
+            // GAS must return correct CORS headers
+        });
+        const json = await res.json();
+        return json;
+    } catch (e) {
+        console.error(e);
+        showToast("連線失敗: " + e.message);
+        return null;
+    }
+}
+
+async function fetchActiveEvent() {
+    setLoading(true, "讀取活動中...");
+    const res = await callAPI('get_active_event');
+    setLoading(false);
+    
+    if (res && res.status === 'success') {
+        const event = res.event;
+        const menu = res.menu;
+        
+        if (event) {
+            state.currentEvent = event;
+            state.menuData = menu;
+            renderEventHeader(event);
+            renderMenuOptions(menu);
+            refreshOrders(); // Load orders
+            
+            // Show Active Warning in Admin
+            document.getElementById('active-event-warning').classList.remove('hidden');
+        } else {
+            state.currentEvent = null;
+            renderNoEvent();
+        }
+    }
+}
+
+async function refreshOrders() {
+    if (!state.currentEvent) return;
+    // Silent update
+    const res = await callAPI('get_orders', { event_id: state.currentEvent.event_id });
+    if (res && res.status === 'success') {
+        renderOrders(res.orders);
+    }
+}
+
+async function submitOrder() {
+    if (!state.currentEvent) return;
+    
+    const buyer = document.getElementById('buyer-name').value.trim();
+    if (!buyer) { alert("請輸入名字"); return; }
+    
+    const itemSelect = document.getElementById('item-select');
+    if(itemSelect.selectedIndex < 0) { alert("請選擇飲品"); return; }
+    
+    const item_name = itemSelect.options[itemSelect.selectedIndex].text.split(' ($')[0]; // simple parse
+    const price = document.getElementById('item-price').value;
+    const notes = document.getElementById('item-notes').value;
+
+    localStorage.setItem('buyer_name', buyer);
+    
+    setLoading(true, "訂單送出中...");
+    const res = await callAPI('add_order', {
+        event_id: state.currentEvent.event_id,
+        buyer_name: buyer,
+        item_name: item_name,
+        price: parseInt(price),
+        notes: notes
+    });
+    setLoading(false);
+    
+    if (res && res.status === 'success') {
+        showToast("訂單已送出！");
+        refreshOrders();
+        document.getElementById('item-notes').value = ''; // clear notes only
+    } else {
+        alert("下單失敗");
+    }
+}
+
+async function publishEvent() {
+    const name = document.getElementById('new-event-name').value;
+    const jsonStr = document.getElementById('menu-json-editor').value;
+    
+    try {
+        JSON.parse(jsonStr); // validate
+    } catch(e) {
+        alert("JSON 格式錯誤，請檢查");
+        return;
+    }
+
+    setLoading(true, "建立活動中...");
+    const res = await callAPI('create_event', {
+        event_name: name,
+        menu_json: jsonStr
+    });
+    setLoading(false);
+
+    if (res && res.status === 'success') {
+        showToast("活動建立成功！");
+        switchMode('user');
+        fetchActiveEvent();
+    } else {
+        alert("建立失敗: " + (res?.message || '未知錯誤'));
+    }
+}
+
+async function closeCurrentEvent() {
+    if(!state.currentEvent) return;
+    if(!confirm("確定要結束當前活動嗎？")) return;
+    
+    setLoading(true, "結單中...");
+    const res = await callAPI('close_event', { event_id: state.currentEvent.event_id });
+    setLoading(false);
+    
+    if (res && res.status === 'success') {
+        showToast("已結單");
+        location.reload();
+    }
+}
+
+async function loadHistory() {
+    const res = await callAPI('get_history');
+    if (res && res.status === 'success') {
+        const tbody = document.querySelector('#history-table tbody');
+        tbody.innerHTML = '';
+        res.history.forEach(h => {
+             const row = `<tr>
+                <td>${h.created_at.substring(5,10)}</td>
+                <td>${h.event_name} <span style="font-size:0.8em; color:${h.status=='Active'?'var(--success)':'#aaa'}">${h.status}</span></td>
+                <td>$${h.total_amount}</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+}
+
+// --- GenAI ---
+async function parseMenu() {
+    const fileBase64 = await getFileBase64(document.getElementById('menu-image').files[0]);
+    if (!fileBase64) { alert("請先選擇圖片"); return; }
+    if (!state.geminiKey) { alert("請先設定 Gemini Key"); toggleSettings(); return; }
+
+    setLoading(true, "AI 正在分析菜單...");
+    
+    try {
+        const genAI = new window.GoogleGenerativeAI(state.geminiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
+        const prompt = `請將這張菜單轉換為 JSON Array。格式: [{"item": "品名", "price": 數字, "category": "類別"}]。只輸出純 JSON，不要 Markdown。`;
+        const imagePart = {
+            inlineData: {
+                data: fileBase64,
+                mimeType: "image/jpeg"
+            },
+        };
+
+        const result = await model.generateContent([prompt, imagePart]);
+        const response = await result.response;
+        const text = response.text();
+        
+        // Clean markdown
+        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        document.getElementById('menu-json-editor').value = cleanJson;
+        document.getElementById('parsed-result').classList.remove('hidden');
+        document.getElementById('btn-publish').classList.remove('hidden');
+
+    } catch (e) {
+        alert("AI 解析失敗: " + e.message);
+    } finally {
+        setLoading(false);
+    }
+}
+
+function getFileBase64(file) {
+    return new Promise((resolve, reject) => {
+        if(!file) resolve(null);
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = error => reject(error);
+    });
+}
+
+// --- UI Logic ---
+function switchMode(mode) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-mode-' + mode).classList.add('active');
+    
+    if (mode === 'admin') {
+        document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('user-panel').classList.add('hidden');
+    } else {
+        document.getElementById('admin-panel').classList.add('hidden');
+        document.getElementById('user-panel').classList.remove('hidden');
+    }
+}
+
+function renderEventHeader(event) {
+    document.getElementById('display-event-name').innerText = event.event_name;
+    const statusEl = document.getElementById('display-event-status');
+    statusEl.innerText = "進行中";
+    statusEl.className = "badge active";
+    document.getElementById('display-event-time').innerText = "開團時間: " + event.created_at.substring(0,16).replace('T', ' ');
+    
+    document.getElementById('order-form').classList.remove('hidden');
+}
+
+function renderNoEvent() {
+    document.getElementById('display-event-name').innerText = "目前無活動";
+    document.getElementById('display-event-status').innerText = "休息中";
+    document.getElementById('display-event-status').className = "badge";
+    document.getElementById('order-form').classList.add('hidden');
+    document.querySelector('#orders-table tbody').innerHTML = '<tr><td colspan="4" style="text-align:center">暫無訂單</td></tr>';
+}
+
+function renderMenuOptions(menu) {
+    const select = document.getElementById('item-select');
+    select.innerHTML = '<option value="" disabled selected>請選擇...</option>';
+    
+    // Group by category if needed, here just flat list
+    menu.forEach((item, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.text = `${item.item} ($${item.price})`;
+        opt.dataset.price = item.price;
+        select.add(opt);
+    });
+}
+
+function updatePrice() {
+    const select = document.getElementById('item-select');
+    const price = select.options[select.selectedIndex].dataset.price;
+    document.getElementById('item-price').value = price;
+}
+
+function renderOrders(orders) {
+    const tbody = document.querySelector('#orders-table tbody');
+    tbody.innerHTML = '';
+    let sum = 0;
+    
+    // Sort by time desc
+    orders.reverse().forEach(o => {
+        sum += parseInt(o.price);
+        const row = `<tr>
+            <td>${o.buyer_name}</td>
+            <td>${o.item_name}</td>
+            <td>${o.notes || ''}</td>
+            <td>$${o.price}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+    });
+    
+    document.getElementById('total-sum').innerText = '$' + sum;
+}
+
+function toggleSettings() {
+    const panel = document.getElementById('settings-panel');
+    panel.classList.toggle('hidden');
+}
+
+function saveSettings() {
+    state.gasUrl = document.getElementById('config-gas-url').value.trim();
+    state.geminiKey = document.getElementById('config-gemini-key').value.trim();
+    localStorage.setItem('gas_url', state.gasUrl);
+    localStorage.setItem('gemini_key', state.geminiKey);
+    location.reload();
+}
+
+function toggleHistory() {
+    const content = document.getElementById('history-content');
+    content.classList.toggle('hidden');
+    if (!content.classList.contains('hidden')) {
+        loadHistory();
+    }
+}
+
+function copyOrders() {
+    const rows = document.querySelectorAll('#orders-table tbody tr');
+    let text = "";
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td');
+        text += `${cols[0].innerText}\t${cols[1].innerText}\t${cols[2].innerText}\t${cols[3].innerText}\n`;
+    });
+    navigator.clipboard.writeText(text).then(() => showToast("已複製！"));
+}
+
+function setLoading(isLoading, text) {
+    const overlay = document.getElementById('loading-overlay');
+    if (isLoading) {
+        if(text) document.getElementById('loading-text').innerText = text;
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
+function showToast(msg) {
+    const div = document.createElement('div');
+    div.className = 'toast';
+    div.innerText = msg;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+}
+</script>
+
+</body>
+</html>
